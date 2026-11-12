@@ -12,7 +12,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true --browser.gatherUsageStats false
 ```
 
-默认启动公开演示。打开 http://127.0.0.1:8501，提交预设任务并点击「批准运行演示」。默认日期覆盖合成样本。每个连接使用独立临时 SQLite，重新连接或重启可能丢失记录。请勿将本机数据库上传。
+默认启动模式为 `public-demo`，用于公网测评，仅使用明确标注的合成数据。打开 http://127.0.0.1:8501，提交预设任务并点击「批准运行演示」。默认日期覆盖合成样本。每个连接使用独立临时 SQLite，重新连接或重启可能丢失记录。请勿将本机数据库上传。
 
 如需在可信本机使用东方财富和原有 SQLite，在同一 PowerShell 先运行：
 
@@ -40,7 +40,7 @@ $env:INVESTBUDDY_PROFILE = 'local'
 - 新任务默认创建研究线程。选择历史线程可追问并查看该线程任务。追问默认沿用线程股票代码与区间。需要变更区间时，明确勾选并设置日期。早期独立任务可从线程选择器单独查看。
 - 线程上下文只引用同线程记录。超过页面设定的近期任务数后，更早任务以确定性摘要提供任务引用、证据编号和日期、完成步骤、未解决问题与审批记录。摘要保留原始引用，体积仍会随线程历史增长。后续查询继续使用实时数据工具。
 - 跨线程偏好仅支持主动保存的预设选项，可查看和删除。任务文本存在本地 SQLite，输入框提示勿填写敏感内容，常见个人持仓和账户词汇会触发拦截。
-- 没有已配置的真实 LLM。可插拔 provider 实现 `generate(context)` 并返回 JSON 字符串，结构为 `{"tools":[{"tool":"research.scope","arguments":{"topic":"financial"}}]}`。仅支持已注册的范围工具和 `financial`、`valuation`、`risk` 参数。Python 编译并执行计划，工具审批和预算由执行器控制。Mock 仅供测试。模型失败或响应无效时使用带标记的规则规划。
+- 真实 LLM 尚未接入，当前研究规划使用规则规划器。可插拔 provider 实现 `generate(context)` 并返回 JSON 字符串，结构为 `{"tools":[{"tool":"research.scope","arguments":{"topic":"financial"}}]}`。仅支持已注册的范围工具和 `financial`、`valuation`、`risk` 参数。Python 编译并执行计划，工具审批和预算由执行器控制。Mock 仅供测试。模型失败或响应无效时使用带标记的规则规划。
 - 财务任务只请求利润表，估值任务只请求交易日 PE，风险任务整理待核验方向。结合两类数据的取数最多发送两个 HTTP 请求；风险梳理也占一次 Agent 工具预算。
 
 ## 测试与 AI 使用
@@ -49,7 +49,7 @@ $env:INVESTBUDDY_PROFILE = 'local'
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-测试覆盖原演示链路，以及使用合成接口夹具验证真实适配器的正常响应、证据回溯、缺失、过期、来源冲突和超时。自动化测试默认离线运行。2026-11-12 使用 Streamlit AppTest 提交默认研究任务并实际请求东方财富，验收证据、指标及估值图渲染，再创建独立演示任务。
+测试覆盖原演示链路，以及使用合成接口夹具验证真实适配器的正常响应、证据回溯、缺失、过期、来源冲突和超时。自动化测试默认离线运行。2026-11-12 在本机 `local` 模式下使用 Streamlit AppTest 实际请求东方财富，验收证据、指标及估值图渲染，再单独验证合成演示任务。
 Codex 用于读取题目、查阅数据入口、编写和运行代码与测试。候选人复核与修订记录待实际检查后补充。
 
 
