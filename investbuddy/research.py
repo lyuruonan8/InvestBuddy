@@ -45,7 +45,7 @@ def summarize(thread, tasks, threshold):
         result = task.get("result") or {}
         evidence = result.get("evidence") or next(
             (step.get("result", []) for step in task["steps"]
-             if step["action"] in {"finance.query", "finance.query_live"}), [])
+             if step["action"] in {"finance.query", "finance.query_live", "finance.query_fuyao"}), [])
         by_date = {}
         for row in evidence:
             by_date.setdefault(row["date"], []).append(row["id"])

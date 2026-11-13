@@ -20,7 +20,7 @@ class Store:
         from investbuddy.research import validate_goal_privacy
 
         validate_goal_privacy(goal)
-        if self.demo_only and (mode != "demo" or any(step["action"] == "finance.query_live" for step in plan)):
+        if self.demo_only and (mode != "demo" or any(step["action"] in {"finance.query_live", "finance.query_fuyao"} for step in plan)):
             raise ValueError("公开演示仅允许合成数据。")
         if max_calls < 1 or max_seconds <= 0:
             raise ValueError("执行预算必须为正数。")

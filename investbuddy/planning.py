@@ -71,11 +71,12 @@ def make_plan(goal, mode, context=None, provider=None):
             preferences = context.get("preferences", [])
             topics = [topic for topic, label in LABELS.items() if f"默认关注{label}" in preferences]
     topics = topics or list(TOPICS)
-    query = "finance.query_live" if mode == "live" else "finance.query"
+    query = {"live": "finance.query_live", "fuyao": "finance.query_fuyao"}.get(mode, "finance.query")
     steps = []
     if {"financial", "valuation"}.intersection(topics):
         steps.extend([
-            dict(name="查询" + "与".join(LABELS[t] for t in topics if t != "risk") + "证据",
+            dict(name="查询扶摇行情、年报及估值快照" if mode == "fuyao" else
+                 "查询" + "与".join(LABELS[t] for t in topics if t != "risk") + "证据",
                  action=query, status="pending", topics=topics),
             dict(name="校验并计算指标", action="finance.calculate", status="pending", topics=topics),
         ])

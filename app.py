@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from pathlib import Path
 import logging
+import math
 import re
 from threading import Thread
 
@@ -50,8 +51,9 @@ with st.expander("跨线程长期偏好"):
             st.rerun()
 
 with st.form("research"):
-    mode = st.selectbox("数据模式", ["demo"] if public_demo else ["live", "demo"],
-                        format_func=lambda value: "真实数据 · 东方财富" if value == "live" else "演示 · 合成数据")
+    mode = st.selectbox("数据模式", ["demo"] if public_demo else ["live", "demo", "fuyao"],
+                        format_func=lambda value: {"live": "真实数据 · 东方财富", "demo": "演示 · 合成数据",
+                                                   "fuyao": "真实数据 · 扶摇"}[value])
     if public_demo:
         symbol = st.selectbox("股票", [thread["symbol"]] if thread else list(DEMO_STOCKS),
                               format_func=lambda code: f"{DEMO_STOCKS[code]} · {code}",
@@ -107,7 +109,7 @@ if submitted:
         task = store.create(symbol, goal, start.isoformat(), end.isoformat(), steps,
                             mode=mode, max_calls=max_calls, max_seconds=max_seconds,
                             thread_id=active_thread["id"], planning=planning, context=context)
-        if mode == "live" or public_demo:
+        if mode in {"live", "fuyao"} or public_demo:
             execute(task, store)
         else:
             start_task(task)
@@ -142,9 +144,11 @@ def task_panel():
     status = task["status"]
     with store.claim(task["id"]) as available:
         pass
-    if status == "awaiting_approval" or (status == "pending" and task.get("mode") == "live"):
+    if status == "awaiting_approval" or (status == "pending" and task.get("mode") in {"live", "fuyao"}):
         if public_demo:
             st.info("批准后运行本地合成样例。")
+        elif task.get("mode") == "fuyao":
+            st.info("批准后向扶摇查询证券代码对应的最新快照和年报。")
         else:
             st.info("批准后将向东方财富发送证券代码和日期区间。研究目标留在本机。")
         if st.button("批准运行演示" if public_demo else "批准真实取数", key=f'approve_{selected}'):
@@ -172,7 +176,7 @@ def task_panel():
         context = task.get("context") or {}
         with st.expander("此任务使用的线程上下文"):
             st.json(context, expanded=1)
-    live = task.get("mode") == "live"
+    live = task.get("mode") in {"live", "fuyao"}
     if not live:
         st.warning("演示模式｜全部金融数值为合成示例。")
     if task["error"]:
@@ -192,15 +196,26 @@ def task_panel():
             for url in dict.fromkeys(row["source_url"] for row in evidence if "source_url" in row):
                 st.markdown(f"[查看供应商原始响应]({url})")
         pe = sorted((row for row in evidence if row["field"] == "pe_ttm"), key=lambda row: row["date"])
-        if pe:
+        fuyao = task.get("mode") == "fuyao"
+        if fuyao:
+            pe = [row for row in pe if type(row["value"]) in (int, float) and math.isfinite(row["value"])]
+        timepoints = {row.get("data_at") or row["date"] for row in pe} if fuyao else set()
+        if fuyao and len(timepoints) == 1:
+            latest = pe[-1]
+            st.metric(f"{label} · 当前 PE TTM", f'{latest["value"]} 倍')
+            st.caption(f'数据时点 {latest.get("data_at") or latest["date"]} · 证据 {latest["id"]}')
+            st.info("仅有最新估值快照，暂不能计算历史估值变化")
+        elif pe:
             chart = go.Figure()
             for source in sorted({row["source"] for row in pe}):
                 rows = [row for row in pe if row["source"] == source]
-                chart.add_scatter(x=[row["date"] for row in rows], y=[row["value"] for row in rows],
+                chart.add_scatter(x=[(row.get("data_at") or row["date"]) if fuyao else row["date"] for row in rows], y=[row["value"] for row in rows],
                                   mode="markers" if live or len(rows) == 1 else "lines+markers",
                                   name=source,
                                   hovertemplate="%{x}<br>市盈率 TTM %{y} 倍<extra></extra>")
             chart_title = "原始市盈率 TTM 记录" if live else "合成示例市盈率 TTM"
+            if fuyao:
+                chart_title = "扶摇估值观测 · PE TTM"
             chart.update_layout(title=f"{label} · {chart_title}",
                                 xaxis_title="时点" if live else f"观测日期 · {label} · 合成示例",
                                 yaxis_title="倍" if live else f"市盈率 TTM（倍） · {label} · 合成示例")

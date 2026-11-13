@@ -1,5 +1,6 @@
 from investbuddy.planning import validate
 from investbuddy.data import query_demo
+from investbuddy.fuyao_data import query_fuyao
 from investbuddy.market_data import query_eastmoney
 
 
@@ -27,5 +28,5 @@ def calculate(evidence):
 
 
 TOOLS = {"finance.query": query_demo, "finance.calculate": calculate,
-         "finance.query_live": query_eastmoney, "research.scope": validate,
+         "finance.query_live": query_eastmoney, "finance.query_fuyao": query_fuyao, "research.scope": validate,
          "research.risk": lambda: "价格竞争、原材料成本和客户集中度待核验；未查询公告。"}

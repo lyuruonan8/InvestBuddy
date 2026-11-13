@@ -75,3 +75,30 @@ def analyze_live(evidence, end, today=None, topics=None):
                                     value=round(100 * (current_row["value"] / base["value"] - 1), 2),
                                     unit="%", evidence=[current_row["id"], base["id"]]))
     return {"metrics": metrics, "warnings": warnings, "facts": facts}
+
+def analyze_fuyao(evidence, today=None):
+    """Analyze the latest annual report and independently dated snapshots."""
+    from datetime import datetime
+    from investbuddy.fuyao_data import MARKET_TZ
+
+    today = today or datetime.now(MARKET_TZ).date()
+    warnings = ["扶摇仅提供最新估值快照，无法计算区间市盈率变化。"]
+    facts = []
+    for row in evidence:
+        age = (today - date.fromisoformat(row["date"])).days
+        limit = 550 if row["report_period"] else 10
+        if age < 0 or age > limit:
+            warnings.append(f'{row["raw_field"]} 数据过期或日期超前（{row["date"]}，{row["id"]}）。')
+        else:
+            facts.append(row)
+    fields = {row["field"]: row for row in facts}
+    revenue, profit = fields.get("operating_income"), fields.get("net_income")
+    metrics = []
+    if revenue and profit:
+        if revenue["value"] > 0:
+            metrics.append(dict(date=revenue["date"], metric="年报归母净利润 / 营业收入",
+                                value=round(100 * profit["value"] / revenue["value"], 2),
+                                unit="%", evidence=[profit["id"], revenue["id"]]))
+        else:
+            warnings.append("营业收入非正，无法计算比率。")
+    return {"metrics": metrics, "warnings": warnings, "facts": facts}
