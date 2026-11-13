@@ -197,11 +197,18 @@ def task_panel():
             for source in sorted({row["source"] for row in pe}):
                 rows = [row for row in pe if row["source"] == source]
                 chart.add_scatter(x=[row["date"] for row in rows], y=[row["value"] for row in rows],
-                                  mode="markers", name=source)
-            chart_title = "原始市盈率 TTM 记录" if live else "合成示例期末市盈率 TTM"
+                                  mode="markers" if live or len(rows) == 1 else "lines+markers",
+                                  name=source,
+                                  hovertemplate="%{x}<br>市盈率 TTM %{y} 倍<extra></extra>")
+            chart_title = "原始市盈率 TTM 记录" if live else "合成示例市盈率 TTM"
             chart.update_layout(title=f"{label} · {chart_title}",
-                                xaxis_title="时点", yaxis_title="倍")
+                                xaxis_title="时点" if live else f"观测日期 · {label} · 合成示例",
+                                yaxis_title="倍" if live else f"市盈率 TTM（倍） · {label} · 合成示例")
             st.plotly_chart(chart)
+            if not live:
+                st.caption(f"{label} · 合成示例。点为构造观测值，连线用于展示区间走势。")
+                if len(pe) == 1:
+                    st.info("区间内只有一个估值观测点，数据不足，无法计算区间市盈率变化。")
         st.subheader(f"研究结果与风险 · {label}")
         report = result["report"]
         st.write("**事实与证据范围**", report["facts"])

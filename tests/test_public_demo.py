@@ -1,4 +1,5 @@
 from datetime import date
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -132,7 +133,26 @@ class PublicDemoTest(unittest.TestCase):
                     self.assertEqual(result["metrics"][0]["value"], margin)
                     self.assertEqual(result["metrics"][-1]["value"], pe_change)
                     self.assertEqual(len(app.get("plotly_chart")), 1)
-                    self.assertIn(code, app.get("plotly_chart")[0].proto.spec)
+                    figure = json.loads(app.get("plotly_chart")[0].proto.spec)
+                    trace = figure["data"][0]
+                    pe = sorted((row for row in result["evidence"] if row["field"] == "pe_ttm"),
+                                key=lambda row: row["date"])
+                    self.assertEqual(len(pe), 8)
+                    self.assertEqual(len({row["id"] for row in pe}), 8)
+                    self.assertTrue(all(row["unit"] == "倍" and "合成示例" in row["source"] for row in pe))
+                    self.assertEqual(trace["mode"], "lines+markers")
+                    self.assertEqual(trace["x"], [row["date"] for row in pe])
+                    self.assertEqual(trace["y"], [row["value"] for row in pe])
+                    self.assertIn("%{x}", trace["hovertemplate"])
+                    self.assertIn("%{y}", trace["hovertemplate"])
+                    for title in (figure["layout"]["title"], figure["layout"]["xaxis"]["title"],
+                                  figure["layout"]["yaxis"]["title"]):
+                        self.assertTrue(all(value in title["text"] for value in (company, code, "合成示例")))
+                    change = result["metrics"][-1]
+                    self.assertEqual(change["value"], round(trace["y"][-1] - trace["y"][0], 2))
+                    self.assertEqual(change["evidence"], [pe[0]["id"], pe[-1]["id"]])
+                    self.assertTrue(any(all(identifier in line for identifier in change["evidence"])
+                                        for line in result["report"]["inference"]))
                     self.assertTrue(any(code in heading.value for heading in app.subheader))
                     other = next(item for item in expectations if item != code)
                     with self.assertRaisesRegex(ValueError, "沿用"):
@@ -160,6 +180,23 @@ class PublicDemoTest(unittest.TestCase):
         self.assertEqual(recovered["status"], "completed")
         self.assertEqual(recovered["steps"][0]["attempts"], 1)
         self.assertEqual({row["symbol"] for row in recovered["result"]["evidence"]}, {"002594.SZ"})
+
+    def test_single_valuation_point_has_no_line_or_change(self):
+        with patch.dict(os.environ, {"INVESTBUDDY_PROFILE": "public-demo"}):
+            app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
+            app.selectbox(key="goal_new").select("估值变化")
+            app.date_input[0].set_value(date(2026, 4, 15))
+            app.date_input[1].set_value(date(2026, 4, 15))
+            app.button[-1].click().run()
+            store = app.session_state["demo_workspace"].store
+            task = execute(store.recent()[0], store, approve=True)
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(task["result"]["metrics"], [])
+            trace = json.loads(app.get("plotly_chart")[0].proto.spec)["data"][0]
+            self.assertEqual(trace["mode"], "markers")
+            self.assertEqual(trace["x"], ["2026-04-15"])
+            self.assertTrue(any("只有一个估值观测点" in entry.value for entry in app.info))
 
     def test_page_handles_empty_data_without_normal_report(self):
         with patch.dict(os.environ, {"INVESTBUDDY_PROFILE": "public-demo"}):

@@ -45,7 +45,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertIsNone(task["result"])
 
     def test_single_period(self):
-        task = execute(self.task("2026-04-01"), self.store)
+        task = execute(self.task("2026-06-30"), self.store)
         self.assertIn("无法计算估值变化", task["result"]["report"]["uncertainty"])
 
 

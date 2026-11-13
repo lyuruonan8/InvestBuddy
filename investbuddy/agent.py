@@ -49,7 +49,7 @@ def report(task, evidence, metrics):
             for m in metrics
         ],
         uncertainty="缺少真实财报、行情及公告。价格竞争、原材料成本与客户集中度为待核验方向，当前无法评估实际影响。"
-        + (" 当前区间只有一个样本时点，无法计算估值变化。" if len({r["date"] for r in evidence}) < 2 else ""),
+        + (" 当前区间只有一个样本时点，无法计算估值变化。" if sum(row["field"] == "pe_ttm" for row in evidence) == 1 else ""),
         scope="当前规划器基于关键词，研究覆盖范围限于预设财务与估值指标。",
     )
 
