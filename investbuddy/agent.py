@@ -42,6 +42,7 @@ def live_report(metrics, warnings, facts):
 def report(task, evidence, metrics):
     return dict(
         mode="合成示例",
+        symbol=task["symbol"],
         facts="当前证据来自本地合成数据。表中记录仅用于验证工作流。",
         inference=[
             f'{m["date"]} {m["metric"]}为 {m["value"]} {m["unit"]}（依据 {", ".join(m["evidence"])}）。'

@@ -96,6 +96,71 @@ class PublicDemoTest(unittest.TestCase):
                 self.assertEqual(second.selectbox(key="thread_selector").options, ["新建线程"])
                 self.assertTrue(all(call.kwargs.get("demo_only") for call in opened.call_args_list))
 
+    def test_three_stocks_on_page_and_thread_binding(self):
+        expectations = {
+            "300750.SZ": ("宁德时代", 12, -2),
+            "600519.SH": ("贵州茅台", 50.98, -1.5),
+            "002594.SZ": ("比亚迪", 4.94, 3),
+        }
+        with patch.dict(os.environ, {"INVESTBUDDY_PROFILE": "public-demo"}):
+            app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()
+            store = app.session_state["demo_workspace"].store
+            for code, (company, margin, pe_change) in expectations.items():
+                with self.subTest(code=code):
+                    app.selectbox(key="thread_selector").select("new").run()
+                    app.selectbox(key="symbol_new").select(code)
+                    app.button[-1].click().run()
+                    self.assertFalse(app.exception)
+                    thread = store.threads()[0]
+                    task = store.thread_tasks(thread["id"])[0]
+                    self.assertEqual(thread["symbol"], code)
+                    self.assertEqual(task["status"], "awaiting_approval")
+                    self.assertEqual(app.selectbox(key=f'symbol_{thread["id"]}').options,
+                                     [f"{company} · {code}"])
+                    app.button(key=f'approve_{task["id"]}').click().run()
+                    deadline = monotonic() + 10
+                    while store.get(task["id"])["status"] in {"awaiting_approval", "running"}:
+                        if monotonic() >= deadline:
+                            self.fail("demo task did not finish")
+                        sleep(.02)
+                    app.run()
+                    self.assertFalse(app.exception)
+                    result = store.get(task["id"])["result"]
+                    self.assertEqual(result["report"]["symbol"], code)
+                    self.assertEqual({row["symbol"] for row in result["evidence"]}, {code})
+                    self.assertEqual({row["company"] for row in result["evidence"]}, {company})
+                    self.assertEqual(result["metrics"][0]["value"], margin)
+                    self.assertEqual(result["metrics"][-1]["value"], pe_change)
+                    self.assertEqual(len(app.get("plotly_chart")), 1)
+                    self.assertIn(code, app.get("plotly_chart")[0].proto.spec)
+                    self.assertTrue(any(code in heading.value for heading in app.subheader))
+                    other = next(item for item in expectations if item != code)
+                    with self.assertRaisesRegex(ValueError, "沿用"):
+                        store.create(other, "财务", task["start"], task["end"], plan("财务"),
+                                     thread_id=thread["id"])
+                    app.selectbox(key=f'goal_{thread["id"]}').select("继续")
+                    next(b for b in app.button if b.label == "创建并运行研究").click().run()
+                    self.assertFalse(app.exception)
+                    followup = next(item for item in store.thread_tasks(thread["id"])
+                                    if item["id"] != task["id"])
+                    self.assertEqual(followup["symbol"], code)
+
+    def test_non_catl_checkpoint_recovery_preserves_evidence(self):
+        store = self.workspace()
+        task = store.create("002594.SZ", "财务", "2026-01-01", "2026-06-30", plan("财务"))
+
+        def fail(evidence):
+            raise RuntimeError("internal marker")
+
+        from investbuddy.tools import TOOLS
+        failed = execute(task, store, {**TOOLS, "finance.calculate": fail}, approve=True)
+        self.assertEqual(failed["status"], "failed")
+        self.assertNotIn("internal marker", failed["error"])
+        recovered = execute(failed, store, {"finance.calculate": TOOLS["finance.calculate"]})
+        self.assertEqual(recovered["status"], "completed")
+        self.assertEqual(recovered["steps"][0]["attempts"], 1)
+        self.assertEqual({row["symbol"] for row in recovered["result"]["evidence"]}, {"002594.SZ"})
+
     def test_page_handles_empty_data_without_normal_report(self):
         with patch.dict(os.environ, {"INVESTBUDDY_PROFILE": "public-demo"}):
             app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py")).run()

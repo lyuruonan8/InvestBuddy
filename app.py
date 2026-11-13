@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from investbuddy.agent import execute
+from investbuddy.data import DEMO_STOCKS
 from investbuddy.planning import make_plan
 from investbuddy.research import PREFERENCES, resolve_followup, summarize, validate_goal_privacy
 from investbuddy.store import Store
@@ -51,10 +52,15 @@ with st.expander("跨线程长期偏好"):
 with st.form("research"):
     mode = st.selectbox("数据模式", ["demo"] if public_demo else ["live", "demo"],
                         format_func=lambda value: "真实数据 · 东方财富" if value == "live" else "演示 · 合成数据")
-    symbol = st.text_input("股票代码", thread["symbol"] if thread else "300750.SZ",
-                           disabled=public_demo or bool(thread), key=f"symbol_{thread_key}").strip().upper()
     if public_demo:
-        options = ["分析宁德时代财务、估值及风险", "财务表现", "估值变化", "主要风险"]
+        symbol = st.selectbox("股票", [thread["symbol"]] if thread else list(DEMO_STOCKS),
+                              format_func=lambda code: f"{DEMO_STOCKS[code]} · {code}",
+                              disabled=bool(thread), key=f"symbol_{thread_key}")
+    else:
+        symbol = st.text_input("股票代码", thread["symbol"] if thread else "300750.SZ",
+                               disabled=bool(thread), key=f"symbol_{thread_key}").strip().upper()
+    if public_demo:
+        options = ["分析财务、估值及风险", "财务表现", "估值变化", "主要风险"]
         if thread:
             options.append("继续")
         goal = st.selectbox("在本线程中追问" if thread else "研究目标", options, key=f"goal_{thread_key}")
@@ -176,7 +182,9 @@ def task_panel():
 
     if task["result"]:
         result = task["result"]
-        st.subheader("数据与证据")
+        code = task["symbol"]
+        label = f"{DEMO_STOCKS[code]} · {code}" if code in DEMO_STOCKS else code
+        st.subheader(f"数据与证据 · {label}")
         evidence = result["evidence"]
         with st.expander(f"原始证据 · {len(evidence)} 条"):
             selected_ids = st.multiselect("按证据编号筛选", [row["id"] for row in evidence])
@@ -190,10 +198,11 @@ def task_panel():
                 rows = [row for row in pe if row["source"] == source]
                 chart.add_scatter(x=[row["date"] for row in rows], y=[row["value"] for row in rows],
                                   mode="markers", name=source)
-            chart.update_layout(title="原始市盈率 TTM 记录" if live else "示例期末市盈率 TTM",
+            chart_title = "原始市盈率 TTM 记录" if live else "合成示例期末市盈率 TTM"
+            chart.update_layout(title=f"{label} · {chart_title}",
                                 xaxis_title="时点", yaxis_title="倍")
             st.plotly_chart(chart)
-        st.subheader("研究结果与风险")
+        st.subheader(f"研究结果与风险 · {label}")
         report = result["report"]
         st.write("**事实与证据范围**", report["facts"])
         for fact in report.get("observations", []):

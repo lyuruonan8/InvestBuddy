@@ -1,6 +1,8 @@
 """Resolve thread follow-ups and compact history without altering original tasks."""
 import re
 
+from investbuddy.data import DEMO_STOCKS
+
 PREFERENCES = {"默认关注财务", "默认关注估值", "默认关注风险", "优先展示数据限制"}
 CONSTRAINTS = ["历史证据仅作上下文；新任务重新查询", "外部取数须按任务审批", "禁止直接买卖建议"]
 
@@ -21,7 +23,11 @@ def resolve_followup(goal, thread, *, explicit_range=False):
     stripped = re.sub(time_terms, "", goal.upper()) if explicit_range else goal.upper()
     for symbol in symbols:
         stripped = stripped.replace(symbol, "")
-    for word in ("宁德时代", "该公司", "这家公司", "这个", "继续", "请", "帮我", "分析", "比较",
+    company = next((name for code, name in DEMO_STOCKS.items()
+                    if inherited in {code, code.split(".")[0]}), None)
+    if company:
+        stripped = stripped.replace(company, "")
+    for word in ( "该公司", "这家公司", "这个", "继续", "请", "帮我", "分析", "比较",
                  "看看", "查看", "关注", "只看", "仅看", "补充", "核验", "解释", "怎样", "如何",
                  "有什么", "变化", "表现", "主要", "年", "财务", "营收", "利润", "收入", "净利",
                  "估值", "市盈率", "风险", "证据", "同比", "和", "及", "与", "呢", "的"):

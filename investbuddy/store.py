@@ -29,6 +29,10 @@ class Store:
         if self.demo_only:
             task["control"]["demo_approval"] = True
         if thread_id:
+            if self.demo_only:
+                thread = next((item for item in self.threads() if item["id"] == thread_id), None)
+                if not thread or thread["symbol"] != symbol:
+                    raise ValueError("研究任务必须沿用当前线程的股票。")
             task.update(thread_id=thread_id, planning=planning, context=context)
         self.save(task)
         return task
